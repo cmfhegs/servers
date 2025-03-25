@@ -21,8 +21,8 @@
   "author": "Landscape AI Team",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.1.0",
-    "winston": "^3.11.0"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",

@@ -18,6 +18,7 @@ import winston from 'winston';
 
 // Import operations
 import { slopeAnalysis } from './operations/terrain_analysis.js';
+import { SlopeAnalysisParams } from './types/terrain_analysis.js';
 
 // Configure logging
 const logger = winston.createLogger({
@@ -162,7 +163,9 @@ class QGISMCPServer {
       try {
         switch (name) {
           case 'qgis:slope_analysis':
-            const result = await slopeAnalysis(args);
+            // Validate or cast args to SlopeAnalysisParams before calling slopeAnalysis
+            const validatedArgs: SlopeAnalysisParams = args as SlopeAnalysisParams;
+            const result = await slopeAnalysis(validatedArgs);
             return {
               content: [
                 {
