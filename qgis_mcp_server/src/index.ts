@@ -18,7 +18,13 @@ import winston from 'winston';
 
 // Import operations
 import { slopeAnalysis } from './operations/terrain_analysis.js';
+import { watershedAnalysis } from './operations/watershed_analysis.js';
+import { aspectAnalysis } from './operations/aspect_analysis.js';
+import { viewshedAnalysis } from './operations/viewshed_analysis.js';
 import { SlopeAnalysisParams } from './types/terrain_analysis.js';
+import { WatershedAnalysisParams } from './types/watershed_analysis.js';
+import { AspectAnalysisParams } from './types/aspect_analysis.js';
+import { ViewshedAnalysisParams } from './types/viewshed_analysis.js';
 
 // Configure logging
 const logger = winston.createLogger({
@@ -141,6 +147,120 @@ class QGISMCPServer {
               },
               required: ['dem_path', 'output_path']
             }
+          },
+          {
+            name: 'qgis:watershed_analysis',
+            description: 'Analyze watersheds and stream networks from a DEM',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dem_path: {
+                  type: 'string',
+                  description: 'Path to the DEM file'
+                },
+                output_path: {
+                  type: 'string',
+                  description: 'Path to save the output files'
+                },
+                flow_accumulation_threshold: {
+                  type: 'number',
+                  description: 'Minimum flow accumulation value to define a stream'
+                },
+                pour_points: {
+                  type: 'string',
+                  description: 'Optional path to pour points vector file'
+                },
+                fill_sinks: {
+                  type: 'boolean',
+                  description: 'Fill sinks in the DEM before processing'
+                },
+                flow_algorithm: {
+                  type: 'string',
+                  enum: ['d8', 'd-infinity', 'mfd'],
+                  description: 'Flow routing algorithm'
+                }
+              },
+              required: ['dem_path', 'output_path']
+            }
+          },
+          {
+            name: 'qgis:aspect_analysis',
+            description: 'Calculate aspect (slope direction) from a DEM',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dem_path: {
+                  type: 'string',
+                  description: 'Path to the DEM file'
+                },
+                output_path: {
+                  type: 'string',
+                  description: 'Path to save the output files'
+                },
+                categories: {
+                  type: 'number',
+                  description: 'Number of aspect categories to classify'
+                },
+                output_format: {
+                  type: 'string',
+                  enum: ['geotiff', 'gpkg', 'png'],
+                  description: 'Format for the output'
+                },
+                include_flat: {
+                  type: 'boolean',
+                  description: 'Whether to include flat areas as a separate category'
+                },
+                category_labels: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Optional custom labels for aspect categories'
+                }
+              },
+              required: ['dem_path', 'output_path']
+            }
+          },
+          {
+            name: 'qgis:viewshed_analysis',
+            description: 'Calculate visible areas from observer points',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dem_path: {
+                  type: 'string',
+                  description: 'Path to the DEM file'
+                },
+                output_path: {
+                  type: 'string',
+                  description: 'Path to save the output files'
+                },
+                observer_height: {
+                  type: 'number',
+                  description: 'Height of the observer in meters'
+                },
+                radius: {
+                  type: 'number',
+                  description: 'Maximum visibility radius in meters'
+                },
+                view_angle: {
+                  type: 'number',
+                  description: 'View angle in degrees (1-360)'
+                },
+                observer_points: {
+                  type: 'string',
+                  description: 'Optional path to observer points vector file'
+                },
+                output_format: {
+                  type: 'string',
+                  enum: ['geotiff', 'gpkg', 'png'],
+                  description: 'Format for the output'
+                },
+                include_invisibility: {
+                  type: 'boolean',
+                  description: 'Whether to include invisible areas'
+                }
+              },
+              required: ['dem_path', 'output_path']
+            }
           }
           // Add more tools here as they are implemented
         ]
@@ -164,16 +284,56 @@ class QGISMCPServer {
         switch (name) {
           case 'qgis:slope_analysis':
             // Validate or cast args to SlopeAnalysisParams before calling slopeAnalysis
-            const validatedArgs: SlopeAnalysisParams = args as SlopeAnalysisParams;
-            const result = await slopeAnalysis(validatedArgs);
+            const slopeArgs: SlopeAnalysisParams = args as SlopeAnalysisParams;
+            const slopeResult = await slopeAnalysis(slopeArgs);
             return {
               content: [
                 {
                   type: 'text',
-                  text: JSON.stringify(result, null, 2)
+                  text: JSON.stringify(slopeResult, null, 2)
                 }
               ]
             };
+          
+          case 'qgis:watershed_analysis':
+            // Validate or cast args to WatershedAnalysisParams
+            const watershedArgs: WatershedAnalysisParams = args as WatershedAnalysisParams;
+            const watershedResult = await watershedAnalysis(watershedArgs);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(watershedResult, null, 2)
+                }
+              ]
+            };
+            
+          case 'qgis:aspect_analysis':
+            // Validate or cast args to AspectAnalysisParams
+            const aspectArgs: AspectAnalysisParams = args as AspectAnalysisParams;
+            const aspectResult = await aspectAnalysis(aspectArgs);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(aspectResult, null, 2)
+                }
+              ]
+            };
+            
+          case 'qgis:viewshed_analysis':
+            // Validate or cast args to ViewshedAnalysisParams
+            const viewshedArgs: ViewshedAnalysisParams = args as ViewshedAnalysisParams;
+            const viewshedResult = await viewshedAnalysis(viewshedArgs);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(viewshedResult, null, 2)
+                }
+              ]
+            };
+            
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,

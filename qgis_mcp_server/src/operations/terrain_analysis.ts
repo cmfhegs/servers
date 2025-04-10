@@ -14,6 +14,83 @@ import {
   FlowPathAnalysisResponse
 } from '../types/terrain_analysis.js';
 import { SlopeUnits, OutputFormat } from '../types/common.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import winston from 'winston';
+import QGISConnector from '../qgis_connector.js';
+
+// Type definitions
+interface TerrainMetadata {
+  operation_time: string;
+  operation_type: string;
+  input_dem: string;
+  output_files: string[];
+  parameters: Record<string, any>;
+}
+
+interface TerrainAnalysisParameters {
+  dem_path: string;
+  output_path: string;
+  analysis_type: 'slope' | 'aspect' | 'hillshade' | 'roughness' | 'tpi' | 'tri';
+  output_format?: string;
+  z_factor?: number;
+  [key: string]: any;
+}
+
+interface SlopeParameters extends TerrainAnalysisParameters {
+  analysis_type: 'slope';
+  slope_format?: 'degrees' | 'percent';
+  classification?: 'continuous' | 'classified';
+  class_breaks?: number[];
+}
+
+interface TerrainStatistics {
+  min: number;
+  max: number;
+  mean: number;
+  std_dev: number;
+  distribution?: Record<string, number>;
+}
+
+interface TerrainAnalysisResponse {
+  terrain_raster_path: string;
+  visualization_path: string;
+  statistics: TerrainStatistics;
+  metadata?: TerrainMetadata;
+}
+
+// Configure logging
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'terrain-analysis' },
+  transports: [
+    new winston.transports.File({ filename: 'terrain-analysis-error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'terrain-analysis.log' }),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]
+});
+
+// Data directory configuration
+const DATA_DIR = process.env.QGIS_DATA_DIR || path.join(process.cwd(), 'data');
+const OUTPUT_DIR = process.env.QGIS_OUTPUT_DIR || path.join(process.cwd(), 'output');
+
+// Ensure output directory exists
+if (!fs.existsSync(OUTPUT_DIR)) {
+  try {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    logger.info(`Created output directory: ${OUTPUT_DIR}`);
+  } catch (error) {
+    logger.error('Failed to create output directory', { error: (error as Error).message });
+  }
+}
 
 /**
  * Execute a QGIS Python script with parameters
@@ -245,4 +322,139 @@ export async function flowPathAnalysis(params: FlowPathAnalysisParams): Promise<
       }
     };
   }
+}
+
+/**
+ * Performs general terrain analysis
+ * @param params - Terrain analysis parameters
+ * @returns Analysis results
+ */
+export async function terrainAnalysis(params: TerrainAnalysisParameters): Promise<TerrainAnalysisResponse> {
+  try {
+    // Input validation
+    if (!params.dem_path) {
+      throw new McpError(
+        ErrorCode.InvalidParameters,
+        'Missing required parameter: dem_path'
+      );
+    }
+
+    if (!params.output_path) {
+      throw new McpError(
+        ErrorCode.InvalidParameters,
+        'Missing required parameter: output_path'
+      );
+    }
+
+    if (!params.analysis_type) {
+      throw new McpError(
+        ErrorCode.InvalidParameters,
+        'Missing required parameter: analysis_type'
+      );
+    }
+
+    // Validate analysis type
+    const validTypes = ['slope', 'aspect', 'hillshade', 'roughness', 'tpi', 'tri'];
+    if (!validTypes.includes(params.analysis_type)) {
+      throw new McpError(
+        ErrorCode.InvalidParameters,
+        `Invalid analysis_type. Must be one of: ${validTypes.join(', ')}`
+      );
+    }
+
+    // Resolve paths
+    const demPath = path.isAbsolute(params.dem_path) 
+      ? params.dem_path 
+      : path.join(DATA_DIR, params.dem_path);
+      
+    const outputPath = path.isAbsolute(params.output_path)
+      ? params.output_path
+      : path.join(OUTPUT_DIR, params.output_path);
+
+    // Ensure DEM file exists
+    if (!fs.existsSync(demPath)) {
+      throw new McpError(
+        ErrorCode.InvalidParameters,
+        `DEM file not found: ${demPath}`
+      );
+    }
+
+    // Prepare request payload
+    const requestData = {
+      dem_path: demPath,
+      output_path: outputPath,
+      analysis_type: params.analysis_type,
+      output_format: params.output_format || 'geotiff',
+      z_factor: params.z_factor || 1.0,
+      ...params // Include any additional parameters
+    };
+
+    // Special handling for slope analysis
+    if (params.analysis_type === 'slope') {
+      requestData.slope_format = (params as SlopeParameters).slope_format || 'degrees';
+      requestData.classification = (params as SlopeParameters).classification || 'continuous';
+      
+      if ((params as SlopeParameters).class_breaks && (params as SlopeParameters).class_breaks.length > 0) {
+        requestData.class_breaks = (params as SlopeParameters).class_breaks;
+      }
+    }
+
+    // Execute request
+    logger.info(`Performing ${params.analysis_type} analysis`, { params: requestData });
+    
+    // Call QGIS server via connector
+    const response = await QGISConnector.runAlgorithm(`terrain:${params.analysis_type}`, requestData);
+    
+    if (!response.success) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Terrain analysis failed: ${response.error?.message || 'Unknown error'}`
+      );
+    }
+    
+    return {
+      ...(response.data as any),
+      // Add metadata about the operation
+      metadata: {
+        operation_time: new Date().toISOString(),
+        operation_type: `${params.analysis_type}_analysis`,
+        input_dem: params.dem_path,
+        output_files: [
+          params.output_path,
+          `${path.parse(params.output_path).name}_visualization.png`
+        ],
+        parameters: {
+          ...params,
+          dem_path: demPath,
+          output_path: outputPath
+        }
+      }
+    };
+  } catch (error) {
+    logger.error('Error in terrain analysis', { 
+      error: (error as Error).message, 
+      stack: (error as Error).stack 
+    });
+    
+    if (error instanceof McpError) {
+      throw error;
+    }
+    
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Terrain analysis failed: ${(error as Error).message}`
+    );
+  }
+}
+
+/**
+ * Performs slope analysis, a specific type of terrain analysis
+ * @param params - Slope analysis parameters
+ * @returns Analysis results
+ */
+export async function slopeAnalysis(params: SlopeParameters): Promise<TerrainAnalysisResponse> {
+  return terrainAnalysis({
+    ...params,
+    analysis_type: 'slope'
+  });
 }
