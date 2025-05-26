@@ -67,6 +67,82 @@ interface ViewshedAnalysisParams extends BaseAnalysisParams {
   observer_height?: number;
 }
 
+interface SlopeAnalysisParams extends BaseAnalysisParams {
+  slope_units?: 'degrees' | 'percent';
+  z_factor?: number;
+  min_slope?: number;
+  max_slope?: number;
+  classification?: string;
+}
+
+interface ZoningClass {
+  id: string;
+  name: string;
+  allowed_uses: string[];
+  restrictions: string[];
+  density: number;
+  color: string;
+}
+
+interface ZoningAnalysisParams extends BaseAnalysisParams {
+  zoning_data_path?: string;
+  buffer_distance?: number;
+  allowed_uses?: string[];
+  zoning_classes?: ZoningClass[];
+}
+
+interface LandUseAnalysisParams extends BaseAnalysisParams {
+  land_use_data_path?: string;
+  land_use_database?: string;
+  reference_year?: number;
+  include_change_analysis?: boolean;
+  end_year?: number;
+  buffer_distance?: number;
+  class_filter?: string[];
+}
+
+interface DevelopmentConstraintsAnalysisParams extends BaseAnalysisParams {
+  constraint_layers?: {
+    slope?: {
+      max_buildable_slope: number;
+      path?: string;
+    };
+    flood_risk?: {
+      include: boolean;
+      buffer_distance?: number;
+      path?: string;
+    };
+    wetlands?: {
+      include: boolean;
+      buffer_distance?: number;
+      path?: string;
+    };
+    protected_areas?: {
+      include: boolean;
+      buffer_distance?: number;
+      path?: string;
+    };
+    water_bodies?: {
+      include: boolean;
+      buffer_distance?: number;
+      path?: string;
+    };
+    custom?: Array<{
+      name: string;
+      path: string;
+      buffer_distance?: number;
+      weight?: number;
+    }>;
+  };
+  weight_factors?: {
+    slope_weight?: number;
+    flood_risk_weight?: number;
+    wetlands_weight?: number;
+    protected_areas_weight?: number;
+    water_bodies_weight?: number;
+  };
+}
+
 // Configure logging
 const logger = winston.createLogger({
   level: 'info',
@@ -402,6 +478,246 @@ export class QGISConnector {
           code: 'CONNECTION_ERROR'
         }
       };
+    }
+  }
+
+  /**
+   * Call the QGIS server to perform slope analysis
+   * @param params Slope analysis parameters
+   * @returns Analysis results
+   */
+  static async performSlopeAnalysis(params: SlopeAnalysisParams): Promise<QGISResponse> {
+    try {
+      const baseUrl = process.env.QGIS_SERVER_URL || 'http://localhost:5000';
+      logger.info('Calling QGIS server for slope analysis', { params });
+      
+      const response = await fetch(`${baseUrl}/process/slope_analysis`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        logger.error('Slope analysis failed', { error });
+        return { success: false, error };
+      }
+      
+      const result = await response.json();
+      logger.info('Slope analysis completed successfully');
+      return result;
+    } catch (error) {
+      logger.error('Error performing slope analysis', { error: (error as Error).message });
+      return {
+        success: false,
+        error: {
+          message: `Failed to communicate with QGIS server: ${(error as Error).message}`,
+          code: 'CONNECTION_ERROR'
+        }
+      };
+    }
+  }
+
+  /**
+   * Call the QGIS server to perform zoning analysis
+   * @param params Zoning analysis parameters
+   * @returns Analysis results
+   */
+  static async performZoningAnalysis(params: ZoningAnalysisParams): Promise<QGISResponse> {
+    try {
+      const baseUrl = process.env.QGIS_SERVER_URL || 'http://localhost:5000';
+      logger.info('Calling QGIS server for zoning analysis', { params });
+      
+      const response = await fetch(`${baseUrl}/process/zoning_analysis`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        logger.error('Zoning analysis failed', { error });
+        return { success: false, error };
+      }
+      
+      const result = await response.json();
+      logger.info('Zoning analysis completed successfully');
+      return result;
+    } catch (error) {
+      logger.error('Error performing zoning analysis', { error: (error as Error).message });
+      return {
+        success: false,
+        error: {
+          message: `Failed to communicate with QGIS server: ${(error as Error).message}`,
+          code: 'CONNECTION_ERROR'
+        }
+      };
+    }
+  }
+
+  /**
+   * Call the QGIS server to perform land use analysis
+   * @param params Land use analysis parameters
+   * @returns Analysis results
+   */
+  static async performLandUseAnalysis(params: LandUseAnalysisParams): Promise<QGISResponse> {
+    try {
+      const baseUrl = process.env.QGIS_SERVER_URL || 'http://localhost:5000';
+      logger.info('Calling QGIS server for land use analysis', { params });
+      
+      const response = await fetch(`${baseUrl}/process/land_use_analysis`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        logger.error('Land use analysis failed', { error });
+        return { success: false, error };
+      }
+      
+      const result = await response.json();
+      logger.info('Land use analysis completed successfully');
+      return result;
+    } catch (error) {
+      logger.error('Error performing land use analysis', { error: (error as Error).message });
+      return {
+        success: false,
+        error: {
+          message: `Failed to communicate with QGIS server: ${(error as Error).message}`,
+          code: 'CONNECTION_ERROR'
+        }
+      };
+    }
+  }
+
+  /**
+   * Call the QGIS server to perform development constraints analysis
+   * @param params Development constraints analysis parameters
+   * @returns Analysis results
+   */
+  static async performDevelopmentConstraintsAnalysis(params: DevelopmentConstraintsAnalysisParams): Promise<QGISResponse> {
+    try {
+      const baseUrl = process.env.QGIS_SERVER_URL || 'http://localhost:5000';
+      logger.info('Calling QGIS server for development constraints analysis', { params });
+      
+      const response = await fetch(`${baseUrl}/process/development_constraints_analysis`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        logger.error('Development constraints analysis failed', { error });
+        return { success: false, error };
+      }
+      
+      const result = await response.json();
+      logger.info('Development constraints analysis completed successfully');
+      return result;
+    } catch (error) {
+      logger.error('Error performing development constraints analysis', { error: (error as Error).message });
+      return {
+        success: false,
+        error: {
+          message: `Failed to communicate with QGIS server: ${(error as Error).message}`,
+          code: 'CONNECTION_ERROR'
+        }
+      };
+    }
+  }
+
+  /**
+   * Performs a topographic position analysis using the QGIS server
+   * @param params - Topographic position analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performTopographicPositionAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/topographic_position_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform topographic position analysis');
+    }
+  }
+
+  /**
+   * Performs a terrain classification analysis using the QGIS server
+   * @param params - Terrain classification analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performTerrainClassificationAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/terrain_classification_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform terrain classification analysis');
+    }
+  }
+
+  /**
+   * Performs a water flow analysis using the QGIS server
+   * @param params - Water flow analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performWaterFlowAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/water_flow_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform water flow analysis');
+    }
+  }
+
+  /**
+   * Performs an infiltration analysis using the QGIS server
+   * @param params - Infiltration analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performInfiltrationAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/infiltration_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform infiltration analysis');
+    }
+  }
+
+  /**
+   * Performs a runoff analysis using the QGIS server
+   * @param params - Runoff analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performRunoffAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/runoff_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform runoff analysis');
+    }
+  }
+
+  /**
+   * Performs an ecosystem services analysis using the QGIS server
+   * @param params - Ecosystem services analysis parameters
+   * @returns Response from the QGIS server
+   */
+  static async performEcosystemServicesAnalysis(params: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/ecosystem_services_analysis`, params);
+      return response.data;
+    } catch (error) {
+      this.handleAxiosError(error, 'Failed to perform ecosystem services analysis');
     }
   }
 }
